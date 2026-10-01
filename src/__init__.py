@@ -1,0 +1,2 @@
+"""Retail CDC lakehouse pipeline."""
+
