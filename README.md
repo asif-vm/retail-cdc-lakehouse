@@ -23,6 +23,8 @@ pytest -q
 Optional infrastructure:
 
 ```bash
+cp .env.example .env
+# Replace the placeholder passwords in .env before starting the services.
 docker compose up -d
 ```
 
