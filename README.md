@@ -46,7 +46,7 @@ docker compose up -d
 
 ## Resume bullets
 
-- Implemented an idempotent CDC pipeline processing **[N] order events**, using event keys and deterministic windowing to reconstruct **[N] current orders** with zero duplicate events.
+- Implemented an idempotent CDC pipeline processing **3,232 order events**, using event keys and deterministic windowing to reconstruct **1,000 current orders** with zero duplicate event IDs or invalid statuses.
 - Modelled Bronze, Silver and Gold data layers in SQL, publishing daily order-status and gross-value marts with automated contract checks.
 - Validated replay recovery through CI by processing the same event stream twice and asserting identical current-state and aggregate outputs.
 
