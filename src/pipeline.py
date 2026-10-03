@@ -18,11 +18,16 @@ def read_events(path: Path) -> pd.DataFrame:
             row = event["after"] or event["before"]
             records.append({
                 "event_id": event["event_id"], "op": event["op"],
-                "event_time": event["event_time"], **row,
+                "event_time": event["event_time"], "order_id": row["order_id"],
+                "store_id": row.get("store_id", "STORE-001"),
+                "customer_id": row["customer_id"], "status": row["status"],
+                "amount": row["amount"], "updated_at": row["updated_at"],
             })
     df = pd.DataFrame(records)
-    df["event_time"] = pd.to_datetime(df["event_time"], utc=True)
-    df["updated_at"] = pd.to_datetime(df["updated_at"], utc=True)
+    # Generated events use whole seconds while live UI events include
+    # microseconds. Pandas 2.x otherwise infers one format for the whole column.
+    df["event_time"] = pd.to_datetime(df["event_time"], utc=True, format="mixed")
+    df["updated_at"] = pd.to_datetime(df["updated_at"], utc=True, format="mixed")
     return df
 
 
@@ -34,14 +39,18 @@ def run_pipeline(events_path: Path, db_path: Path) -> dict[str, int | float]:
     with duckdb.connect(str(db_path)) as con:
         con.execute("""CREATE TABLE IF NOT EXISTS bronze_events (
             event_id VARCHAR PRIMARY KEY, op VARCHAR, event_time TIMESTAMPTZ,
-            order_id VARCHAR, customer_id VARCHAR, status VARCHAR,
+            order_id VARCHAR, store_id VARCHAR, customer_id VARCHAR, status VARCHAR,
             amount DOUBLE, updated_at TIMESTAMPTZ
         )""")
+        con.execute("ALTER TABLE bronze_events ADD COLUMN IF NOT EXISTS store_id VARCHAR DEFAULT 'STORE-001'")
         con.register("incoming", events)
-        con.execute("INSERT OR IGNORE INTO bronze_events SELECT * FROM incoming")
+        con.execute("""INSERT OR IGNORE INTO bronze_events
+            (event_id, op, event_time, order_id, store_id, customer_id, status, amount, updated_at)
+            SELECT event_id, op, event_time, order_id, store_id, customer_id, status, amount, updated_at
+            FROM incoming""")
         con.execute("""
             CREATE OR REPLACE TABLE silver_orders AS
-            SELECT order_id, customer_id, status, amount, updated_at
+            SELECT order_id, store_id, customer_id, status, amount, updated_at
             FROM bronze_events
             QUALIFY row_number() OVER (
                 PARTITION BY order_id ORDER BY updated_at DESC, event_time DESC, event_id DESC
@@ -49,10 +58,10 @@ def run_pipeline(events_path: Path, db_path: Path) -> dict[str, int | float]:
         """)
         con.execute("""
             CREATE OR REPLACE TABLE gold_daily_orders AS
-            SELECT CAST(updated_at AS DATE) AS order_date, status,
+            SELECT CAST(updated_at AS DATE) AS order_date, store_id, status,
                    count(*) AS orders, round(sum(amount), 2) AS gross_value,
                    count(DISTINCT customer_id) AS customers
-            FROM silver_orders GROUP BY 1, 2 ORDER BY 1, 2
+            FROM silver_orders GROUP BY 1, 2, 3 ORDER BY 1, 2, 3
         """)
         bronze = con.execute("SELECT count(*) FROM bronze_events").fetchone()[0]
         silver = con.execute("SELECT count(*) FROM silver_orders").fetchone()[0]

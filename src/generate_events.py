@@ -20,6 +20,7 @@ def create_events(path: Path, orders: int = 5000, seed: int = 42) -> Path:
         created = base + timedelta(minutes=rng.randint(0, 525_600))
         current = {
             "order_id": order_id,
+            "store_id": f"STORE-{rng.randint(1, 12):03d}",
             "customer_id": f"CUS-{rng.randint(1, max(50, orders // 4)):06d}",
             "status": "created",
             "amount": round(rng.uniform(100, 12000), 2),

@@ -18,7 +18,12 @@ python -m venv .venv
 pip install -r requirements.txt
 python -m src.pipeline
 pytest -q
+uvicorn app:app --reload
 ```
+
+Open `http://127.0.0.1:8000` to create or update a demo order and see its
+complete CDC history. Reuse the same order ID with a new status to demonstrate
+how the current-state table changes while every earlier event remains stored.
 
 Optional infrastructure:
 
